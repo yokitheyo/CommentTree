@@ -84,6 +84,15 @@ class CommentTree {
                 this.closeReplyModal();
             }
         });
+
+        // Добавляем обработчик для автоматического изменения высоты textarea
+        this.replyContentInput.addEventListener('input', () => this.autoResizeTextarea(this.replyContentInput));
+    }
+
+    // Функция для автоматического изменения высоты textarea
+    autoResizeTextarea(element) {
+        element.style.height = 'auto';
+        element.style.height = Math.max(element.scrollHeight, 150) + 'px';
     }
 
     async apiCall(url, options = {}) {
@@ -176,17 +185,17 @@ class CommentTree {
                 <div class="comment-header">
                     <div class="comment-meta">
                         ${totalChildren > 0 ?
-            `<button class="collapse-btn ${isCollapsed ? 'collapsed' : ''}" data-id="${comment.id}">
+                `<button class="collapse-btn ${isCollapsed ? 'collapsed' : ''}" data-id="${comment.id}">
                                 ${isCollapsed ? '▶' : '▼'}
                             </button>` :
-            '<span class="collapse-spacer">•</span>'
-        }
+                '<span class="collapse-spacer">•</span>'
+            }
                         <span class="comment-author">${this.escapeHtml(comment.author)}</span>
                         <span class="comment-date">${this.formatDate(comment.created_at)}</span>
                         ${totalChildren > 0 ?
-            `<span class="children-count">${totalChildren} ${this.getChildrenText(totalChildren)}</span>` :
-            ''
-        }
+                `<span class="children-count">${totalChildren} ${this.getChildrenText(totalChildren)}</span>` :
+                ''
+            }
                     </div>
                     <div class="comment-actions">
                         ${!isDeleted ? `

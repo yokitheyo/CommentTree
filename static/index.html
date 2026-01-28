@@ -1,112 +1,117 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CommentTree - Древовидные комментарии</title>
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" type="image/svg+xml" href="https://tech.wildberries.ru/cabinet/favicon.svg">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 <body>
-<div class="container">
-    <header class="header">
-        <h1>CommentTree</h1>
-        <p>Древовидные комментарии с поиском</p>
-    </header>
+    <!-- Фон с частицами -->
+    <div id="particles-js" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1;"></div>
 
-    <div class="search-section">
-        <div class="search-box">
-            <input
-                    type="text"
-                    id="searchInput"
-                    placeholder="Поиск по комментариям..."
-                    class="search-input"
-            >
-            <button id="searchBtn" class="btn btn-primary">Найти</button>
-            <button id="clearBtn" class="btn btn-secondary">Очистить</button>
-        </div>
-    </div>
+    <div class="container">
+        <header class="header">
+            <h1>CommentTree</h1>
+            <p>Древовидные комментарии с поиском</p>
+        </header>
 
-    <div class="add-comment-section">
-        <div class="comment-form">
-            <input
-                    type="text"
-                    id="authorInput"
-                    placeholder="Ваше имя"
-                    class="form-input"
-                    maxlength="100"
-            >
-            <textarea
-                    id="contentInput"
-                    placeholder="Напишите комментарий..."
-                    class="form-textarea"
-                    rows="3"
-                    maxlength="1000"
-            ></textarea>
-            <button id="addCommentBtn" class="btn btn-primary">Добавить комментарий</button>
-        </div>
-    </div>
-
-    <div class="comments-section">
-        <div class="comments-header">
-            <h2>Комментарии</h2>
-            <div class="sort-controls">
-                <label>Сортировка:</label>
-                <select id="sortSelect" class="form-select">
-                    <option value="asc">Сначала старые</option>
-                    <option value="desc">Сначала новые</option>
-                </select>
+        <div class="search-section">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Поиск по комментариям..." class="search-input">
+                <button id="searchBtn" class="btn btn-primary">Найти</button>
+                <button id="clearBtn" class="btn btn-secondary">Очистить</button>
             </div>
         </div>
 
-        <div id="commentsContainer" class="comments-container">
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <span>Загрузка...</span>
-            </div>
-            <div class="no-comments" id="noComments" style="display: none;">
-                Комментариев пока нет. Станьте первым!
+        <div class="add-comment-section">
+            <div class="comment-form">
+                <input type="text" id="authorInput" placeholder="Ваше имя" class="form-input" maxlength="100">
+                <textarea id="contentInput" placeholder="Напишите комментарий..." class="form-textarea" rows="3"
+                    maxlength="1000"></textarea>
+                <button id="addCommentBtn" class="btn btn-primary">Добавить комментарий</button>
             </div>
         </div>
 
-        <div class="pagination">
-            <button id="prevBtn" class="btn btn-secondary" disabled>← Предыдущая</button>
-            <span id="pageInfo" class="page-info">Страница 1</span>
-            <button id="nextBtn" class="btn btn-secondary">Следующая →</button>
-        </div>
-    </div>
-</div>
+        <div class="comments-section">
+            <div class="comments-header">
+                <h2>Комментарии</h2>
+                <div class="sort-controls">
+                    <label>Сортировка:</label>
+                    <select id="sortSelect" class="form-select">
+                        <option value="asc">Сначала старые</option>
+                        <option value="desc">Сначала новые</option>
+                    </select>
+                </div>
+            </div>
 
-<!-- Модальное окно для ответа -->
-<div id="replyModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>Ответить на комментарий</h3>
-            <button class="close-btn" id="closeModal">×</button>
-        </div>
-        <div class="modal-body">
-            <div class="reply-to" id="replyTo"></div>
-            <input
-                    type="text"
-                    id="replyAuthorInput"
-                    placeholder="Ваше имя"
-                    class="form-input"
-                    maxlength="100"
-            >
-            <textarea
-                    id="replyContentInput"
-                    placeholder="Ваш ответ..."
-                    class="form-textarea"
-                    rows="4"
-                    maxlength="1000"
-            ></textarea>
-            <div class="modal-actions">
-                <button id="submitReplyBtn" class="btn btn-primary">Отправить ответ</button>
-                <button id="cancelReplyBtn" class="btn btn-secondary">Отмена</button>
+            <div id="commentsContainer" class="comments-container">
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <span>Загрузка...</span>
+                </div>
+                <div class="no-comments" id="noComments" style="display: none;">
+                    Комментариев пока нет. Станьте первым!
+                </div>
+            </div>
+
+            <div class="pagination">
+                <button id="prevBtn" class="btn btn-secondary" disabled>← Предыдущая</button>
+                <span id="pageInfo" class="page-info">Страница 1</span>
+                <button id="nextBtn" class="btn btn-secondary">Следующая →</button>
             </div>
         </div>
     </div>
-</div>
 
-<script src="/static/scripts.js"></script>
+    <div id="replyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Ответить на комментарий</h3>
+                <button class="close-btn" id="closeModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="reply-to" id="replyTo"></div>
+                <input type="text" id="replyAuthorInput" placeholder="Ваше имя" class="form-input" maxlength="100">
+                <textarea id="replyContentInput" placeholder="Ваш ответ..." class="form-textarea"
+                    maxlength="1000"></textarea>
+                <div class="modal-actions">
+                    <button id="submitReplyBtn" class="btn btn-primary">Отправить ответ</button>
+                    <button id="cancelReplyBtn" class="btn btn-secondary">Отмена</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
+
+    <!-- Инициализация particles.js -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            particlesJS("particles-js", {
+                "particles": {
+                    "number": { "value": 60, "density": { "enable": true, "value_area": 800 } },
+                    "color": { "value": "#00ff88" },
+                    "shape": { "type": "circle" },
+                    "opacity": { "value": 0.3, "random": true },
+                    "size": { "value": 3, "random": true },
+                    "line_linked": { "enable": true, "distance": 150, "color": "#00ff88", "opacity": 0.2, "width": 1 },
+                    "move": { "enable": true, "speed": 2, "out_mode": "out" }
+                },
+                "interactivity": {
+                    "detect_on": "canvas",
+                    "events": { "onhover": { "enable": true, "mode": "grab" } },
+                    "modes": { "grab": { "distance": 140, "line_linked": { "opacity": 1 } } }
+                },
+                "retina_detect": true
+            });
+        });
+    </script>
+
+    <script src="/static/scripts.js"></script>
 </body>
+
 </html>
