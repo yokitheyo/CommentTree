@@ -2,17 +2,17 @@ package config
 
 import (
 	"errors"
-	"os"
+	"fmt"
 	"strings"
 
 	wbfconf "github.com/wb-go/wbf/config"
+	"github.com/wb-go/wbf/zlog"
 )
 
 type Config struct {
 	Server     ServerConfig     `yaml:"server"`
 	Database   DatabaseConfig   `yaml:"database"`
 	Migrations MigrationsConfig `yaml:"migrations"`
-	Redis      RedisConfig      `yaml:"redis"`
 	Logging    LoggingConfig    `yaml:"logging"`
 }
 
@@ -37,16 +37,6 @@ type MigrationsConfig struct {
 	Path string `yaml:"path"`
 }
 
-type RedisConfig struct {
-	Addr     string `yaml:"addr"`
-	Password string `yaml:"password"`
-	DB       int    `yaml:"db"`
-}
-
-type CacheConfig struct {
-	Prefix string `yaml:"prefix"`
-}
-
 type LoggingConfig struct {
 	Level string `yaml:"level"`
 }
@@ -54,22 +44,8 @@ type LoggingConfig struct {
 func Load(path string) (*Config, error) {
 	cfgw := wbfconf.New()
 
-	setDefaults(cfgw)
-
-	if path == "" {
-		if _, err := os.Stat("config.yaml"); err == nil {
-			path = "config.yaml"
-		} else if _, err := os.Stat("/app/config.yaml"); err == nil {
-			path = "/app/config.yaml"
-		}
-	}
-
-	if path != "" {
-		if err := cfgw.Load(path); err != nil {
-			if _, statErr := os.Stat(path); statErr == nil {
-				return nil, err
-			}
-		}
+	if err := cfgw.LoadConfigFiles(path); err != nil {
+		return nil, fmt.Errorf("load config from %q: %w", path, err)
 	}
 
 	var cfg Config
@@ -77,54 +53,13 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
-	if dsn := os.Getenv("DATABASE_DSN"); dsn != "" {
-		cfg.Database.DSN = dsn
-	}
-
-	if cfg.Database.ConnectRetries == 0 {
-		cfg.Database.ConnectRetries = 20
-	}
-	if cfg.Database.ConnectRetryDelaySec == 0 {
-		cfg.Database.ConnectRetryDelaySec = 5
-	}
-	if cfg.Database.MaxOpenConns == 0 {
-		cfg.Database.MaxOpenConns = 25
-	}
-	if cfg.Database.MaxIdleConns == 0 {
-		cfg.Database.MaxIdleConns = 5
-	}
-	if cfg.Database.ConnMaxLifetimeSec == 0 {
-		cfg.Database.ConnMaxLifetimeSec = 1800
-	}
+	zlog.Logger.Info().
+		Str("dsn", cfg.Database.DSN).
+		Msg("config loaded")
 
 	if strings.TrimSpace(cfg.Database.DSN) == "" {
 		return nil, errors.New("database.dsn is required (set in config file or DATABASE_DSN env)")
 	}
 
 	return &cfg, nil
-}
-
-func setDefaults(c *wbfconf.Config) {
-	c.SetDefault("server.addr", ":8080")
-	c.SetDefault("server.shutdown_timeout_sec", 15)
-	c.SetDefault("server.read_timeout_sec", 10)
-	c.SetDefault("server.write_timeout_sec", 10)
-
-	c.SetDefault("database.dsn", "")
-	c.SetDefault("database.slaves", "")
-	c.SetDefault("database.max_open_conns", 25)
-	c.SetDefault("database.max_idle_conns", 5)
-	c.SetDefault("database.conn_max_lifetime_sec", 1800)
-	c.SetDefault("database.connect_retries", 20)
-	c.SetDefault("database.connect_retry_delay_sec", 5)
-
-	c.SetDefault("migrations.path", "./migrations")
-
-	c.SetDefault("redis.addr", "")
-	c.SetDefault("redis.password", "")
-	c.SetDefault("redis.db", 0)
-
-	c.SetDefault("cache.prefix", "ct:")
-
-	c.SetDefault("logging.level", "info")
 }

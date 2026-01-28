@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/wb-go/wbf/dbpg"
 	"github.com/wb-go/wbf/retry"
 	"github.com/wb-go/wbf/zlog"
-
-	"github.com/wb-go/wbf/dbpg"
-	"github.com/yokitheyo/wb_level3_3/internal/domain"
+	"github.com/yokitheyo/CommentTree/internal/domain"
+	"github.com/yokitheyo/CommentTree/internal/pkg/repository"
 )
 
 type commentRepository struct {
@@ -28,12 +28,24 @@ func (r *commentRepository) Save(ctx context.Context, c *domain.Comment) error {
     VALUES ($1, $2, $3, $4)
     RETURNING id, created_at, updated_at
 `
-	return r.db.Master.QueryRowContext(ctx, query,
+	err := r.db.Master.QueryRowContext(ctx, query,
 		c.ParentID,
 		c.Author,
 		c.Content,
 		c.Deleted,
 	).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt)
+
+	if err != nil {
+		zlog.Logger.Error().Err(err).Str("author", c.Author).Msg("repository: Save comment failed")
+		return err
+	}
+
+	log := zlog.Logger.Debug().Int64("comment_id", c.ID)
+	if c.ParentID != nil {
+		log = log.Int64("parent_id", *c.ParentID)
+	}
+	log.Msg("comment saved to database")
+	return nil
 }
 
 func (r *commentRepository) FindByID(ctx context.Context, id int64) (*domain.Comment, error) {
@@ -43,36 +55,22 @@ func (r *commentRepository) FindByID(ctx context.Context, id int64) (*domain.Com
 		WHERE id = $1
 	`
 
-	c := &domain.Comment{}
-	var parent sql.NullInt64
-	var updated sql.NullTime
-
 	row := r.db.Master.QueryRowContext(ctx, query, id)
-	err := row.Scan(&c.ID, &parent, &c.Author, &c.Content, &c.CreatedAt, &updated, &c.Deleted)
+	c, err := repository.ScanComment(row)
 	if err != nil {
 		if err == sql.ErrNoRows {
+			zlog.Logger.Debug().Int64("comment_id", id).Msg("comment not found")
 			return nil, nil
 		}
-		zlog.Logger.Error().Err(err).Msg("FindByID failed")
+		zlog.Logger.Error().Err(err).Int64("comment_id", id).Msg("repository: FindByID failed")
 		return nil, err
 	}
 
-	if parent.Valid {
-		c.ParentID = &parent.Int64
-	}
-	if updated.Valid {
-		c.UpdatedAt = &updated.Time
-	}
-
+	zlog.Logger.Debug().Int64("comment_id", id).Msg("comment found by id")
 	return c, nil
 }
 
 func (r *commentRepository) FindChildren(ctx context.Context, parentID *int64, limit, offset int, sort string) ([]*domain.Comment, error) {
-	order := "created_at ASC"
-	if sort == "desc" {
-		order = "created_at DESC"
-	}
-
 	var query string
 	var args []interface{}
 
@@ -83,7 +81,7 @@ func (r *commentRepository) FindChildren(ctx context.Context, parentID *int64, l
 			WHERE parent_id IS NULL AND deleted = false
 			ORDER BY %s
 			LIMIT $1 OFFSET $2
-		`, order)
+		`, repository.OrderByCreated(sort))
 		args = []interface{}{limit, offset}
 	} else {
 		query = fmt.Sprintf(`
@@ -92,62 +90,46 @@ func (r *commentRepository) FindChildren(ctx context.Context, parentID *int64, l
 			WHERE parent_id = $1 AND deleted = false
 			ORDER BY %s
 			LIMIT $2 OFFSET $3
-		`, order)
+		`, repository.OrderByCreated(sort))
 		args = []interface{}{*parentID, limit, offset}
 	}
 
-	rows, err := r.db.QueryWithRetry(ctx, r.strategy, query, args...)
+	log := zlog.Logger.Debug().Int("limit", limit).Int("offset", offset)
+	if parentID != nil {
+		log = log.Int64("parent_id", *parentID)
+	}
+	log.Msg("repository: FindChildren query starting")
+
+	comments, err := repository.QueryComments(ctx, r.db, r.strategy, query, args...)
 	if err != nil {
-		zlog.Logger.Error().Err(err).Msg("FindChildren query failed")
-		return nil, err
-	}
-	defer rows.Close()
-
-	var comments []*domain.Comment
-	for rows.Next() {
-		c := &domain.Comment{}
-		var parent sql.NullInt64
-		var updated sql.NullTime
-
-		if err := rows.Scan(
-			&c.ID,
-			&parent,
-			&c.Author,
-			&c.Content,
-			&c.CreatedAt,
-			&updated,
-			&c.Deleted,
-		); err != nil {
-			zlog.Logger.Error().Err(err).Msg("FindChildren scan failed")
-			return nil, err
-		}
-
-		if parent.Valid {
-			c.ParentID = &parent.Int64
-		}
-		if updated.Valid {
-			c.UpdatedAt = &updated.Time
-		}
-
-		comments = append(comments, c)
-	}
-
-	if err := rows.Err(); err != nil {
-		zlog.Logger.Error().Err(err).Msg("FindChildren rows iteration failed")
+		zlog.Logger.Error().Err(err).Interface("parent_id", parentID).Msg("repository: FindChildren failed")
 		return nil, err
 	}
 
-	zlog.Logger.Info().Msgf("FindChildren returned %d comments for parent_id=%v", len(comments), parentID)
+	log = zlog.Logger.Debug().Int("count", len(comments))
+	if parentID != nil {
+		log = log.Int64("parent_id", *parentID)
+	}
+	log.Msg("repository: FindChildren completed")
 	return comments, nil
 }
 
 func (r *commentRepository) Delete(ctx context.Context, id int64) error {
-	_, err := r.db.ExecWithRetry(ctx, r.strategy, `
+	zlog.Logger.Debug().Int64("comment_id", id).Msg("repository: Delete starting")
+
+	res, err := r.db.ExecWithRetry(ctx, r.strategy, `
 		UPDATE comments
 		SET deleted = true, updated_at = $2
 		WHERE id = $1
 	`, id, time.Now())
-	return err
+
+	if err != nil {
+		zlog.Logger.Error().Err(err).Int64("comment_id", id).Msg("repository: Delete failed")
+		return err
+	}
+
+	zlog.Logger.Debug().Int64("comment_id", id).Interface("result", res).Msg("comment marked as deleted")
+	return nil
 }
 
 func (r *commentRepository) Search(ctx context.Context, q string, limit, offset int) ([]*domain.Comment, error) {
@@ -160,95 +142,14 @@ func (r *commentRepository) Search(ctx context.Context, q string, limit, offset 
 		LIMIT $2 OFFSET $3
 	`
 
-	zlog.Logger.Info().Msgf("Simple search query: %s, limit: %d, offset: %d", q, limit, offset)
+	zlog.Logger.Debug().Str("search_query", q).Int("limit", limit).Int("offset", offset).Msg("repository: Search query starting")
 
-	rows, err := r.db.QueryWithRetry(ctx, r.strategy, query, q, limit, offset)
+	comments, err := repository.QueryComments(ctx, r.db, r.strategy, query, q, limit, offset)
 	if err != nil {
-		zlog.Logger.Error().Err(err).Msg("Search query failed")
+		zlog.Logger.Error().Err(err).Str("search_query", q).Msg("repository: Search failed")
 		return nil, err
 	}
-	defer rows.Close()
 
-	var comments []*domain.Comment
-	for rows.Next() {
-		c := &domain.Comment{}
-		var parent sql.NullInt64
-		var updated sql.NullTime
-
-		if err := rows.Scan(
-			&c.ID,
-			&parent,
-			&c.Author,
-			&c.Content,
-			&c.CreatedAt,
-			&updated,
-			&c.Deleted,
-		); err != nil {
-			zlog.Logger.Error().Err(err).Msg("Search scan failed")
-			return nil, err
-		}
-
-		if parent.Valid {
-			c.ParentID = &parent.Int64
-		}
-		if updated.Valid {
-			c.UpdatedAt = &updated.Time
-		}
-
-		comments = append(comments, c)
-	}
-
-	zlog.Logger.Info().Msgf("Simple search returned %d comments for query: %s", len(comments), q)
-	return comments, nil
-}
-
-func (r *commentRepository) searchFallback(ctx context.Context, q string, limit, offset int) ([]*domain.Comment, error) {
-	query := `
-		SELECT id, parent_id, author, content, created_at, updated_at, deleted
-		FROM comments
-		WHERE (content ILIKE '%' || $1 || '%' OR author ILIKE '%' || $1 || '%')
-		AND deleted = false
-		ORDER BY created_at DESC
-		LIMIT $2 OFFSET $3
-	`
-
-	zlog.Logger.Info().Msgf("Using fallback search for query: %s", q)
-
-	rows, err := r.db.QueryWithRetry(ctx, r.strategy, query, q, limit, offset)
-	if err != nil {
-		zlog.Logger.Error().Err(err).Msg("Fallback search failed")
-		return nil, err
-	}
-	defer rows.Close()
-
-	var comments []*domain.Comment
-	for rows.Next() {
-		c := &domain.Comment{}
-		var parent sql.NullInt64
-		var updated sql.NullTime
-
-		if err := rows.Scan(
-			&c.ID,
-			&parent,
-			&c.Author,
-			&c.Content,
-			&c.CreatedAt,
-			&updated,
-			&c.Deleted,
-		); err != nil {
-			return nil, err
-		}
-
-		if parent.Valid {
-			c.ParentID = &parent.Int64
-		}
-		if updated.Valid {
-			c.UpdatedAt = &updated.Time
-		}
-
-		comments = append(comments, c)
-	}
-
-	zlog.Logger.Info().Msgf("Fallback search returned %d comments", len(comments))
+	zlog.Logger.Debug().Str("search_query", q).Int("count", len(comments)).Msg("repository: Search completed")
 	return comments, nil
 }

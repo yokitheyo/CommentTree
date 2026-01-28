@@ -1,10 +1,10 @@
-module github.com/yokitheyo/wb_level3_3
+module github.com/yokitheyo/CommentTree
 
 go 1.23.5
 
 require (
 	github.com/pressly/goose/v3 v3.25.0
-	github.com/wb-go/wbf v0.0.4
+	github.com/wb-go/wbf v0.0.12
 )
 
 require (
@@ -19,6 +19,7 @@ require (
 	github.com/go-playground/validator/v10 v10.14.0 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
+	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.4 // indirect
 	github.com/leodido/go-urn v1.2.4 // indirect

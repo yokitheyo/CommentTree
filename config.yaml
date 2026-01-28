@@ -16,13 +16,5 @@ database:
 migrations:
   path: "./migrations"
 
-redis:
-  addr: ""
-  password: ""
-  db: 0
-
-cache:
-  prefix: "ct:"
-
 logging:
   level: "info"

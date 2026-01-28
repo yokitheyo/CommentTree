@@ -5,9 +5,9 @@ import (
 	"errors"
 
 	"github.com/wb-go/wbf/zlog"
-	"github.com/yokitheyo/wb_level3_3/internal/infrastructure/search"
+	"github.com/yokitheyo/CommentTree/internal/infrastructure/search"
 
-	"github.com/yokitheyo/wb_level3_3/internal/domain"
+	"github.com/yokitheyo/CommentTree/internal/domain"
 )
 
 type CommentUsecase struct {
@@ -54,7 +54,6 @@ func (u *CommentUsecase) GetThread(ctx context.Context, parentID *int64, limit, 
 
 	zlog.Logger.Info().Msgf("GetThread found %d comments for parent_id=%v", len(comments), parentID)
 
-	// 🚀 Всегда рекурсивно достраиваем дерево, независимо от уровня
 	for _, comment := range comments {
 		if err := u.loadAllChildren(ctx, comment); err != nil {
 			zlog.Logger.Error().Err(err).Msgf("failed to load children for comment %d", comment.ID)
@@ -64,10 +63,8 @@ func (u *CommentUsecase) GetThread(ctx context.Context, parentID *int64, limit, 
 	return comments, nil
 }
 
-// loadAllChildren рекурсивно загружает всех детей для комментария
 func (u *CommentUsecase) loadAllChildren(ctx context.Context, comment *domain.Comment) error {
-	// Загружаем всех прямых детей (без лимита для полного дерева)
-	children, err := u.repo.FindChildren(ctx, &comment.ID, 1000, 0, "asc") // Увеличиваем лимит
+	children, err := u.repo.FindChildren(ctx, &comment.ID, 1000, 0, "asc")
 	if err != nil {
 		return err
 	}
@@ -75,11 +72,9 @@ func (u *CommentUsecase) loadAllChildren(ctx context.Context, comment *domain.Co
 	comment.Children = children
 	zlog.Logger.Debug().Msgf("loaded %d children for comment %d", len(children), comment.ID)
 
-	// Рекурсивно загружаем детей для каждого ребенка
 	for _, child := range children {
 		if err := u.loadAllChildren(ctx, child); err != nil {
 			zlog.Logger.Error().Err(err).Msgf("failed to load children for comment %d", child.ID)
-			// Продолжаем обработку остальных детей
 		}
 	}
 

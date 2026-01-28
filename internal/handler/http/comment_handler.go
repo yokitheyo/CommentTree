@@ -6,16 +6,14 @@ import (
 
 	"github.com/wb-go/wbf/ginext"
 	"github.com/wb-go/wbf/zlog"
-	"github.com/yokitheyo/wb_level3_3/internal/domain"
-	"github.com/yokitheyo/wb_level3_3/internal/dto"
+	"github.com/yokitheyo/CommentTree/internal/domain"
+	"github.com/yokitheyo/CommentTree/internal/dto"
 )
 
-// CommentHandler обрабатывает HTTP-запросы по комментариям.
 type CommentHandler struct {
 	service domain.CommentService
 }
 
-// NewCommentHandler создаёт новый CommentHandler.
 func NewCommentHandler(service domain.CommentService) *CommentHandler {
 	return &CommentHandler{service: service}
 }
@@ -37,6 +35,12 @@ func (h *CommentHandler) CreateComment(c *ginext.Context) {
 		return
 	}
 
+	log := zlog.Logger.Debug().Str("author", req.Author)
+	if req.ParentID != nil {
+		log = log.Int64("parent_id", *req.ParentID)
+	}
+	log.Msg("CreateComment called")
+
 	comment, err := h.service.CreateComment(c, req.ParentID, req.Author, req.Content)
 	if err != nil {
 		zlog.Logger.Error().Err(err).Msg("CreateComment failed")
@@ -44,7 +48,8 @@ func (h *CommentHandler) CreateComment(c *ginext.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, mapToCommentResponse(comment))
+	zlog.Logger.Debug().Int64("comment_id", comment.ID).Msg("comment created successfully")
+	c.JSON(http.StatusCreated, MapToCommentResponse(comment))
 
 }
 
@@ -54,6 +59,7 @@ func (h *CommentHandler) GetComments(c *ginext.Context) {
 	if parentStr := c.Query("parent"); parentStr != "" {
 		id, err := strconv.ParseInt(parentStr, 10, 64)
 		if err != nil {
+			zlog.Logger.Warn().Err(err).Str("parent", parentStr).Msg("invalid parent id")
 			c.JSON(http.StatusBadRequest, ginext.H{"error": "invalid parent id"})
 			return
 		}
@@ -64,15 +70,25 @@ func (h *CommentHandler) GetComments(c *ginext.Context) {
 	if l := c.Query("limit"); l != "" {
 		if val, err := strconv.Atoi(l); err == nil {
 			limit = val
+		} else {
+			zlog.Logger.Warn().Err(err).Str("limit", l).Msg("invalid limit parameter, using default")
 		}
 	}
 	offset := 0
 	if o := c.Query("offset"); o != "" {
 		if val, err := strconv.Atoi(o); err == nil {
 			offset = val
+		} else {
+			zlog.Logger.Warn().Err(err).Str("offset", o).Msg("invalid offset parameter, using default")
 		}
 	}
 	sort := c.Query("sort")
+
+	log := zlog.Logger.Debug().Int("limit", limit).Int("offset", offset).Str("sort", sort)
+	if parentID != nil {
+		log = log.Int64("parent_id", *parentID)
+	}
+	log.Msg("GetComments called with parameters")
 
 	comments, err := h.service.GetThread(c, parentID, limit, offset, sort)
 	if err != nil {
@@ -81,7 +97,7 @@ func (h *CommentHandler) GetComments(c *ginext.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, mapToCommentResponses(comments))
+	c.JSON(http.StatusOK, MapToCommentResponses(comments))
 }
 
 // DeleteComment DELETE /comments/:id
@@ -89,12 +105,15 @@ func (h *CommentHandler) DeleteComment(c *ginext.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
+		zlog.Logger.Warn().Err(err).Str("id", idStr).Msg("invalid id parameter")
 		c.JSON(http.StatusBadRequest, ginext.H{"error": "invalid id"})
 		return
 	}
 
+	zlog.Logger.Debug().Int64("comment_id", id).Msg("DeleteThread called")
+
 	if err := h.service.DeleteThread(c, id); err != nil {
-		zlog.Logger.Error().Err(err).Msg("DeleteThread failed")
+		zlog.Logger.Error().Err(err).Int64("comment_id", id).Msg("DeleteThread failed")
 		c.JSON(http.StatusInternalServerError, ginext.H{"error": "failed to delete comment"})
 		return
 	}
@@ -106,6 +125,7 @@ func (h *CommentHandler) DeleteComment(c *ginext.Context) {
 func (h *CommentHandler) SearchComments(c *ginext.Context) {
 	query := c.Query("query")
 	if query == "" {
+		zlog.Logger.Warn().Msg("search query is empty")
 		c.JSON(http.StatusBadRequest, ginext.H{"error": "query cannot be empty"})
 		return
 	}
@@ -114,51 +134,27 @@ func (h *CommentHandler) SearchComments(c *ginext.Context) {
 	if l := c.Query("limit"); l != "" {
 		if val, err := strconv.Atoi(l); err == nil {
 			limit = val
+		} else {
+			zlog.Logger.Warn().Err(err).Str("limit", l).Msg("invalid limit parameter in search, using default")
 		}
 	}
 	offset := 0
 	if o := c.Query("offset"); o != "" {
 		if val, err := strconv.Atoi(o); err == nil {
 			offset = val
+		} else {
+			zlog.Logger.Warn().Err(err).Str("offset", o).Msg("invalid offset parameter in search, using default")
 		}
 	}
 
+	zlog.Logger.Debug().Str("query", query).Int("limit", limit).Int("offset", offset).Msg("SearchComment called")
+
 	comments, err := h.service.SearchComment(c, query, limit, offset)
 	if err != nil {
-		zlog.Logger.Error().Err(err).Msg("SearchComment failed")
+		zlog.Logger.Error().Err(err).Str("query", query).Msg("SearchComment failed")
 		c.JSON(http.StatusInternalServerError, ginext.H{"error": "search failed"})
 		return
 	}
 
 	c.JSON(http.StatusOK, comments)
-}
-
-func mapToCommentResponse(c *domain.Comment) *dto.CommentResponse {
-	if c == nil {
-		return nil
-	}
-
-	children := make([]*dto.CommentResponse, 0, len(c.Children))
-	for _, ch := range c.Children {
-		children = append(children, mapToCommentResponse(ch))
-	}
-
-	return &dto.CommentResponse{
-		ID:        c.ID,
-		ParentID:  c.ParentID,
-		Content:   c.Content,
-		Author:    c.Author,
-		CreatedAt: c.CreatedAt,
-		UpdatedAt: c.UpdatedAt,
-		Deleted:   c.Deleted,
-		Children:  children,
-	}
-}
-
-func mapToCommentResponses(list []*domain.Comment) []*dto.CommentResponse {
-	out := make([]*dto.CommentResponse, 0, len(list))
-	for _, c := range list {
-		out = append(out, mapToCommentResponse(c))
-	}
-	return out
 }

@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # PostgreSQL база данных
   db:
     image: postgres:15-alpine
     container_name: commenttree_db
@@ -14,7 +13,7 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d commenttree"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d commenttree" ]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -23,7 +22,6 @@ services:
       - commenttree_network
     restart: unless-stopped
 
-  # Go приложение
   app:
     build:
       context: .
@@ -36,19 +34,15 @@ services:
         condition: service_healthy
     environment:
       - DATABASE_DSN=postgres://postgres:postgres@db:5432/commenttree?sslmode=disable
-    volumes:
-      # Для логов (опционально)
-      - ./logs:/app/logs
     networks:
       - commenttree_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/comments"]
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/comments" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-
 
 volumes:
   postgres_data:
