@@ -60,10 +60,10 @@ func (r *commentRepository) FindByID(ctx context.Context, id int64) (*domain.Com
 	if err != nil {
 		if err == sql.ErrNoRows {
 			zlog.Logger.Debug().Int64("comment_id", id).Msg("comment not found")
-			return nil, nil
+			return nil, fmt.Errorf("comment id=%d: %w", id, domain.ErrCommentNotFound)
 		}
 		zlog.Logger.Error().Err(err).Int64("comment_id", id).Msg("repository: FindByID failed")
-		return nil, err
+		return nil, fmt.Errorf("find comment by id=%d: %w", id, err)
 	}
 
 	zlog.Logger.Debug().Int64("comment_id", id).Msg("comment found by id")
