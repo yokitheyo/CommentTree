@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/yokitheyo/CommentTree/internal/domain"
 )
@@ -18,7 +19,7 @@ func ScanComment(row RowScanner) (*domain.Comment, error) {
 	var updated sql.NullTime
 
 	if err := row.Scan(&c.ID, &parent, &c.Author, &c.Content, &c.CreatedAt, &updated, &c.Deleted); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("scan comment: %w", err)
 	}
 
 	if parent.Valid {

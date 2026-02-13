@@ -50,7 +50,7 @@ func Load(path string) (*Config, error) {
 
 	var cfg Config
 	if err := cfgw.Unmarshal(&cfg); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 
 	zlog.Logger.Info().
