@@ -37,7 +37,7 @@ func (r *commentRepository) Save(ctx context.Context, c *domain.Comment) error {
 
 	if err != nil {
 		zlog.Logger.Error().Err(err).Str("author", c.Author).Msg("repository: Save comment failed")
-		return err
+		return fmt.Errorf("save comment: %w", err)
 	}
 
 	log := zlog.Logger.Debug().Int64("comment_id", c.ID)
@@ -60,10 +60,10 @@ func (r *commentRepository) FindByID(ctx context.Context, id int64) (*domain.Com
 	if err != nil {
 		if err == sql.ErrNoRows {
 			zlog.Logger.Debug().Int64("comment_id", id).Msg("comment not found")
-			return nil, nil
+			return nil, fmt.Errorf("comment id=%d: %w", id, domain.ErrCommentNotFound)
 		}
 		zlog.Logger.Error().Err(err).Int64("comment_id", id).Msg("repository: FindByID failed")
-		return nil, err
+		return nil, fmt.Errorf("find comment by id=%d: %w", id, err)
 	}
 
 	zlog.Logger.Debug().Int64("comment_id", id).Msg("comment found by id")
@@ -103,7 +103,7 @@ func (r *commentRepository) FindChildren(ctx context.Context, parentID *int64, l
 	comments, err := repository.QueryComments(ctx, r.db, r.strategy, query, args...)
 	if err != nil {
 		zlog.Logger.Error().Err(err).Interface("parent_id", parentID).Msg("repository: FindChildren failed")
-		return nil, err
+		return nil, fmt.Errorf("find children parent_id=%v: %w", parentID, err)
 	}
 
 	log = zlog.Logger.Debug().Int("count", len(comments))
@@ -125,7 +125,7 @@ func (r *commentRepository) Delete(ctx context.Context, id int64) error {
 
 	if err != nil {
 		zlog.Logger.Error().Err(err).Int64("comment_id", id).Msg("repository: Delete failed")
-		return err
+		return fmt.Errorf("delete comment id=%d: %w", id, err)
 	}
 
 	zlog.Logger.Debug().Int64("comment_id", id).Interface("result", res).Msg("comment marked as deleted")
@@ -147,7 +147,7 @@ func (r *commentRepository) Search(ctx context.Context, q string, limit, offset 
 	comments, err := repository.QueryComments(ctx, r.db, r.strategy, query, q, limit, offset)
 	if err != nil {
 		zlog.Logger.Error().Err(err).Str("search_query", q).Msg("repository: Search failed")
-		return nil, err
+		return nil, fmt.Errorf("search comments query=%q: %w", q, err)
 	}
 
 	zlog.Logger.Debug().Str("search_query", q).Int("count", len(comments)).Msg("repository: Search completed")

@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/wb-go/wbf/zlog"
 	"github.com/yokitheyo/CommentTree/internal/infrastructure/search"
@@ -38,7 +39,7 @@ func (u *CommentUsecase) CreateComment(ctx context.Context, parentID *int64, aut
 
 	if err := u.repo.Save(ctx, c); err != nil {
 		zlog.Logger.Error().Err(err).Msg("usecase: Save comment failed")
-		return nil, err
+		return nil, fmt.Errorf("save comment: %w", err)
 	}
 
 	zlog.Logger.Info().Msgf("comment created id=%d parent=%v", c.ID, c.ParentID)
@@ -49,7 +50,7 @@ func (u *CommentUsecase) GetThread(ctx context.Context, parentID *int64, limit, 
 	comments, err := u.repo.FindChildren(ctx, parentID, limit, offset, sort)
 	if err != nil {
 		zlog.Logger.Error().Err(err).Msg("usecase: FindChildren failed")
-		return nil, err
+		return nil, fmt.Errorf("find children for parent_id=%v: %w", parentID, err)
 	}
 
 	zlog.Logger.Info().Msgf("GetThread found %d comments for parent_id=%v", len(comments), parentID)
@@ -66,7 +67,7 @@ func (u *CommentUsecase) GetThread(ctx context.Context, parentID *int64, limit, 
 func (u *CommentUsecase) loadAllChildren(ctx context.Context, comment *domain.Comment) error {
 	children, err := u.repo.FindChildren(ctx, &comment.ID, 1000, 0, "asc")
 	if err != nil {
-		return err
+		return fmt.Errorf("load children for comment %d: %w", comment.ID, err)
 	}
 
 	comment.Children = children
@@ -87,7 +88,7 @@ func (u *CommentUsecase) DeleteThread(ctx context.Context, id int64) error {
 	}
 	if err := u.repo.Delete(ctx, id); err != nil {
 		zlog.Logger.Error().Err(err).Msgf("usecase: Delete failed id=%d", id)
-		return err
+		return fmt.Errorf("delete comment id=%d: %w", id, err)
 	}
 	zlog.Logger.Info().Msgf("comment deleted id=%d", id)
 	return nil
@@ -97,5 +98,9 @@ func (u *CommentUsecase) SearchComment(ctx context.Context, q string, limit, off
 	if q == "" {
 		return nil, errors.New("empty query")
 	}
-	return u.search.SearchComments(ctx, q, limit, offset)
+	comments, err := u.search.SearchComments(ctx, q, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("search comments: %w", err)
+	}
+	return comments, nil
 }

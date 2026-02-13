@@ -2,6 +2,7 @@ package search
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/wb-go/wbf/zlog"
 	"github.com/yokitheyo/CommentTree/internal/domain"
@@ -25,7 +26,7 @@ func (f *PostgresFullText) SearchComments(ctx context.Context, query string, lim
 	comments, err := f.repo.Search(ctx, query, limit, offset)
 	if err != nil {
 		zlog.Logger.Error().Err(err).Str("query", query).Msg("search: SearchComments failed")
-		return nil, err
+		return nil, fmt.Errorf("search comments %q: %w", query, err)
 	}
 
 	zlog.Logger.Info().Str("query", query).Int("results", len(comments)).Msg("search: SearchComments completed")
